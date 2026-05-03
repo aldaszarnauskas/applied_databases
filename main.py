@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 
 
+# Load the environment variables that cannot be hardcoded in the script
 load_dotenv()
 
 
@@ -34,12 +35,14 @@ x - Exit application""")
     return choice
 
 
+# Connect to Neo4j database
 neo4jdriver = GraphDatabase.driver(
     os.getenv("NEO4J_URI"),
     auth=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))  
     )
 
 
+# Define the program that retrieves the IDs of attendees connected to attendee a
 def get_names(tx, attendeeID):
     query = """
         MATCH (a:Attendee {AttendeeID: $ID})-[:CONNECTED_TO]-(b:Attendee)
@@ -52,6 +55,7 @@ def get_names(tx, attendeeID):
     return IDs
 
 
+# Define the program that takes in the IDs of two attendees and connects them in Neo4j database if they are not yet connected
 def connect_attendees(tx, attendee_one_ID, attendee_two_ID):
     with conn.cursor() as cursor:
         cursor.execute("""SELECT AttendeeID 
@@ -65,20 +69,21 @@ def connect_attendees(tx, attendee_one_ID, attendee_two_ID):
         if len(list(attendees)) != 2:
             print("One or both of the attendee IDs does not exist")
 
-
+        # This if statement proceeds if both attendees exist in mysql database
         elif attendees:
-
             query = """
                     MATCH (a:Attendee {AttendeeID: $ID1})-[:CONNECTED_TO]-(b:Attendee {AttendeeID: $ID2})
                     RETURN a
                     """
+            # This query checks if attendees are connected
             attendees_connected = tx.run(query, ID1=attendee_one_ID, ID2=attendee_two_ID).single()
 
-
+            # If attendees are not connected then this if block connects them in both directions
             if not attendees_connected:
                 tx.run("""
                     MATCH (a:Attendee {AttendeeID: $ID1}), (b:Attendee {AttendeeID: $ID2})
                     MERGE (a)-[:CONNECTED_TO]->(b)
+                    MERGE (b)-[:CONNECTED_TO]->(a)
                 """, ID1=attendee_one_ID, ID2=attendee_two_ID)
                 print(f"Attendee {attendee_one_ID} is now connected to attendee {attendee_two_ID}")
 
@@ -87,11 +92,19 @@ def connect_attendees(tx, attendee_one_ID, attendee_two_ID):
                 print(f"Attendee {attendee_one_ID} were already connected to attendee {attendee_two_ID}")
 
 
+# Defines the interactive program that allows the user to interact with the menu and make changes in databases
 def sql_queries():
+
+    # choice_six_selected tracks if choice six were selected yet or not
+    # It ensures that the program shows the info about the rooms before it was started
+    # But not the most recent that were updating while the program is running
     choice_six_selected = False
 
 
+    # This while loop ensures that the program continuously shows the menu to the user until
+    # the user exits the program with x
     while True:
+
         choice = print_menu()
 
 
@@ -181,10 +194,10 @@ Add New Attendee
 
                 if attendee:
                     print(f"*** ERROR *** Attendee ID: {attendeeID} already exist")
-                gender_correct = attendee_gender != "Male" or attendee_gender != "Female"
+                gender_correct = attendee_gender == "Male" or attendee_gender == "Female"
 
 
-                if gender_correct:
+                if not gender_correct:
                     print("*** ERROR *** Gender must be Male/Female")
                 cursor.execute("SELECT companyName FROM company WHERE companyID = %s", (attendee_company,))
                 company = cursor.fetchone()
@@ -265,6 +278,7 @@ These attendees are connected:""")
 
 
         if choice == "5":
+            # Allows 2 attempts before returning to main menu
             count = 0
             while True and not count == 2:
                 attendee_one_ID = input("Enter attendee 1 ID: ")
@@ -286,10 +300,15 @@ These attendees are connected:""")
                         connected_attendees = session.execute_write(connect_attendees, int(attendee_one_ID), int(attendee_two_ID))
                     break
             
+            # If the user enters incorrect IDs twice, then, the user is brought back to the main Menu and he gets this 
+            # informative message
             if count == 2:
                 print("You entered incorrect attendees IDs two times")
 
 
+        # This if and else block ensure that the user gets the info about the rooms before the option
+        # 6 was selected but not the updated version if the info about the rooms were updated before 
+        # this option was selected.
         if choice == "6" and not choice_six_selected:
             choice_six_selected = True
             with conn.cursor() as cursor:
@@ -298,6 +317,8 @@ These attendees are connected:""")
                 """,)
                 rooms = cursor.fetchall()
 
+                # This query retrieves the number of letter of the room with longest name for 
+                # creating later the table that displays the info about the rooms 
                 cursor.execute("""SELECT MAX(LENGTH(roomName)) AS max_len
                 FROM room 
                 """,)
