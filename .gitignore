@@ -4,6 +4,7 @@ neo4j-desktop-2.1.3-x86_64.AppImage
 workspace.code-workspace
 venv/
 .env
+neo4j-desktop-2.1.4-x86_64.AppImage
 =======
 # Byte-compiled / optimized / DLL files
 __pycache__/
